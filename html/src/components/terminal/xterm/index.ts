@@ -201,6 +201,41 @@ export class Xterm {
         );
         register(addEventListener(window, 'resize', () => fitAddon.fit()));
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
+        terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+            if (e.ctrlKey && e.code === 'KeyV' && e.type === 'keydown') {
+                // 1. 防止长按按键导致连续不断地触发粘贴
+                if (e.repeat) {
+                    return false;
+                }
+                // 2. 明确阻止浏览器的原生粘贴行为
+                e.preventDefault();
+                e.stopPropagation();
+                navigator.clipboard
+                    .readText()
+                    .then(text => {
+                        if (text) {
+                            // 3. 安全防护逻辑：检查是否包含换行符或回车符
+                            if (text.includes('\n') || text.includes('\r')) {
+                                // 弹出浏览器原生的确认框，阻塞执行直到用户确认
+                                const proceed = window.confirm(
+                                    '⚠️ Security Warning\n\nThe content you pasted contains multiple lines of text or line breaks. Pasting it directly may cause the command to be executed immediately.\n\nAre you sure to paste?'
+                                );
+                                // 如果用户点击了“取消”，直接退出，不执行粘贴
+                                if (!proceed) {
+                                    return;
+                                }
+                            }
+                            // 如果没有换行符，或者用户点击了“确定”，则执行粘贴
+                            terminal.paste(text);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('failed to read clipboard, please check terminal: ', err);
+                    });
+                return false;
+            }
+            return true;
+        });
     }
 
     @bind
